@@ -1,7 +1,6 @@
 package ee.paaro.catalogsync.web;
 
 import ee.paaro.catalogsync.domain.Category;
-import ee.paaro.catalogsync.domain.Product;
 import ee.paaro.catalogsync.repository.CategoryRepository;
 import ee.paaro.catalogsync.repository.ProductRepository;
 import ee.paaro.catalogsync.service.CatalogueImportService;
@@ -11,6 +10,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * What the back office needs: which categories are placeholders, what is sitting
@@ -40,8 +41,21 @@ public class PlaceholderController {
 
     @GetMapping
     public List<PlaceholderView> list() {
-        return categories.findAllByPlaceholderTrueOrderByCreatedAtAsc().stream()
-                .map(this::toView)
+        List<Category> placeholders = categories.findAllByPlaceholderTrueOrderByCreatedAtAscIdAsc();
+        if (placeholders.isEmpty()) {
+            return List.of();
+        }
+        List<Long> ids = placeholders.stream().map(Category::getId).toList();
+        Map<Long, List<String>> byCategory = products.findExternalIdsByCategoryIdIn(ids).stream()
+                .collect(Collectors.groupingBy(
+                        ProductRepository.CategoryProduct::getCategoryId,
+                        Collectors.mapping(ProductRepository.CategoryProduct::getExternalId, Collectors.toList())));
+        return placeholders.stream()
+                .map(category -> new PlaceholderView(
+                        category.getExternalId(),
+                        category.getName(),
+                        category.getCreatedAt(),
+                        byCategory.getOrDefault(category.getId(), List.of())))
                 .toList();
     }
 
@@ -49,12 +63,5 @@ public class PlaceholderController {
     public ResponseEntity<Void> move(@RequestBody MoveRequest request) {
         importService.moveProduct(request.productExternalId(), request.categoryExternalId());
         return ResponseEntity.noContent().build();
-    }
-
-    private PlaceholderView toView(Category category) {
-        List<String> ids = products.findAllByCategoryId(category.getId()).stream()
-                .map(Product::getExternalId)
-                .toList();
-        return new PlaceholderView(category.getExternalId(), category.getName(), category.getCreatedAt(), ids);
     }
 }

@@ -10,5 +10,5 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
 
     Optional<Category> findByExternalId(String externalId);
 
-    List<Category> findAllByPlaceholderTrueOrderByCreatedAtAsc();
+    List<Category> findAllByPlaceholderTrueOrderByCreatedAtAscIdAsc();
 }
